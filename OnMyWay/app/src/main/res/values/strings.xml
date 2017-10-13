@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">OnMyWay</string>
+
+    <string name="ACCOUNT_KIT_CLIENT_TOKEN">a113e4a6101a5d8c7ecc022f813d04a1</string>
+    <string name="FACEBOOK_APP_ID">508390456181259</string>
+    <string name="ak_login_protocol_scheme">ak508390456181259</string>
+    <string name="fb_login_protocol_scheme">fb508390456181259</string>
+
+    <string name="login_email_label">Login with Email</string>
+    <string name="login_phone_label">Login with Phone Number</string>
+
+    <string name="id_label">Account ID</string>
+    <string name="phone_label">Phone Number</string>
+    <string name="email_label">Email</string>
+    <string name="name_label">Name</string>
+    <string name="logout_label">Log Out</string>
+
+    <string name="no_geocoder_available">No geocoder available</string>
+    <string name="no_location_data_provided">No location data provided</string>
+
+    <string name="service_not_available">Sorry, the service is not available</string>
+    <string name="invalid_lat_long_used">Invalid latitude or longitude used</string>
+
+    <string name="address_found">Address found</string>
+    <string name="no_address_found">Sorry, no address found</string>
+    <string name="user_type">userType</string>
+
+
+</resources>
