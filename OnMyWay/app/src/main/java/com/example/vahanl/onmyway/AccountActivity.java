@@ -74,6 +74,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -82,6 +83,8 @@ public class AccountActivity extends AppCompatActivity implements OnMapReadyCall
 
     private static final int MY_LOCATION_REQUEST_CODE = 1;
     private static final String TAG = "AccountActivity";
+    private static final long WAIT_THRESHOLD = TimeUnit.MINUTES.toMillis(10);
+    private static final long DRIVER_WAIT_THRESHOLD = TimeUnit.MINUTES.toMillis(2);
     ProfileTracker profileTracker;
     ImageView profilePic;
     private GoogleMap mMap;
@@ -112,6 +115,8 @@ public class AccountActivity extends AppCompatActivity implements OnMapReadyCall
 
     private User mUser;
 
+    private ValueEventListener mRouteListener;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -122,19 +127,75 @@ public class AccountActivity extends AppCompatActivity implements OnMapReadyCall
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
         mResultReceiver = new AddressResultReceiver(new Handler());
+        mFirebaseDbRef = FirebaseDatabase.getInstance().getReference();
+        mRouteListener = new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
 
+                for (DataSnapshot routeSnapshot : dataSnapshot.getChildren()) {
+                    User user = routeSnapshot.getValue(User.class);
+                    if (user == null ||
+                            user.startLocation == null ||
+                            user.endLocation == null) {
+                        return;
+                    }
+
+                    // meet users
+                    if (user.type.equals(Constants.TYPE_DRIVER)) {
+                        com.google.maps.model.LatLng origin = getLatLng(user.startLocation);
+                        com.google.maps.model.LatLng dest = getLatLng(user.endLocation);
+                        DirectionsResult result = null;
+                        try {
+                            result = DirectionsApi.newRequest(mGeoApiContext)
+                                    .origin(origin)
+                                    .destination(dest)
+                                    .await();
+                        } catch (ApiException e) {
+                            e.printStackTrace();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        if (containsRoute(result, mUserDirectionsResult)) {
+                            String message = "I am a footer indeed:" + mUser.type +
+                                    ".I am on the route of the driver: " +
+                                    user.name;
+                            Log.d(TAG, message);
+                            Log.d(TAG, user.type + " endTime: " + user.endTime);
+                            Log.d(TAG, mUser.type + " endTime: " + mUser.endTime);
+                            showSnackbar(message);
+                            mMap.clear();
+                            addPolyline(result, mMap);
+                        }
+                    } else {
+                        LatLng origin = getGmsLatLng(user.startLocation);
+                        LatLng dest = getGmsLatLng(user.endLocation);
+                        if (containsRoute(mUserDirectionsResult, origin, dest)) {
+                            String message = "I am driver indeed: " + mUser.type +
+                                    ".I found a footer on my route named: " +
+                                    user.name;
+                            Log.d(TAG, message);
+                            showSnackbar(message);
+                            mMap.clear();
+                            addMarkersToMap(origin, dest, mMap);
+                        }
+                    }
+
+                }
+
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                Log.w(TAG, "Failed to read value.", databaseError.toException());
+            }
+        };
 
         initializeUI();
         fetchAccountInfo();
-        initializeFirebaseDb();
-
-
-
         intitializeMap();
-
         setSearchListeners();
-
-
     }
 
     private void intitializeMap() {
@@ -145,116 +206,26 @@ public class AccountActivity extends AppCompatActivity implements OnMapReadyCall
     }
 
     private void initializeFirebaseDb() {
-        mFirebaseDbRef = FirebaseDatabase.getInstance().getReference();
-
-
-//        mFirebaseDbRef.child("routes").addChildEventListener(new ChildEventListener() {
-//            @Override
-//            public void onChildAdded(DataSnapshot dataSnapshot, String s) {
-//
-//                User user = dataSnapshot.getValue(User.class);
-//
-//                Log.d(TAG, "user name: " + user.name);
-//                Log.d(TAG, "user type: " + user.type);
-//                Log.d(TAG, "user startTime: " + user.startTime);
-//
-//
-//            }
-//
-//            @Override
-//            public void onChildChanged(DataSnapshot dataSnapshot, String s) {
-//
-//                User user = dataSnapshot.getValue(User.class);
-//                Log.d(TAG, "onChildChanged, user name: " + user.name);
-//            }
-//
-//            @Override
-//            public void onChildRemoved(DataSnapshot dataSnapshot) {
-//
-//            }
-//
-//            @Override
-//            public void onChildMoved(DataSnapshot dataSnapshot, String s) {
-//
-//            }
-//
-//            @Override
-//            public void onCancelled(DatabaseError databaseError) {
-//
-//            }
-//        });
         String userType = getUserType();
 
-        Query usersInTime = mFirebaseDbRef.child("routes").child(userType);
+        Query usersInTime = mFirebaseDbRef.child("routes")
+                .child(userType)
+                .orderByChild("startTime")
+                .startAt(mUser.startTime - WAIT_THRESHOLD)
+                .endAt(mUser.endTime + DRIVER_WAIT_THRESHOLD);
 
-        mFirebaseDbRef.child("routes").addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
+        usersInTime.addValueEventListener(mRouteListener);
 
+    }
 
-                for (DataSnapshot routeTypeSnapshot : dataSnapshot.getChildren()) {
-                    String routType = routeTypeSnapshot.getKey();
-                    if (!mUser.type.equals(routType)) {
-                        for (DataSnapshot routeSnapshot : routeTypeSnapshot.getChildren()) {
-                            User user = routeSnapshot.getValue(User.class);
-                            if (user == null ||
-                                    user.startLocation == null ||
-                                    user.endLocation == null) {
-                                return;
-                            }
-                            // meet users
-                            if (user.type.equals(Constants.TYPE_DRIVER)) {
-                                com.google.maps.model.LatLng origin = getLatLng(user.startLocation);
-                                com.google.maps.model.LatLng dest = getLatLng(user.endLocation);
-                                DirectionsResult result = null;
-                                try {
-                                    result = DirectionsApi.newRequest(mGeoApiContext)
-                                            .origin(origin)
-                                            .destination(dest)
-                                            .await();
-                                } catch (ApiException e) {
-                                    e.printStackTrace();
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
-                                if (containsRoute(result, mUserDirectionsResult)) {
-                                    String message = "I am a footer indeed:" + mUser.type +
-                                            ".I am on the route of the driver: " +
-                                            user.name;
-                                    Log.d(TAG, message);
-                                    showSnackbar(message);
-                                    mMap.clear();
-                                    addPolyline(result, mMap);
-                                }
-                            } else {
-                                LatLng origin = getGmsLatLng(user.startLocation);
-                                LatLng dest = getGmsLatLng(user.endLocation);
-                                if (containsRoute(mUserDirectionsResult, origin, dest)) {
-                                    String message = "I am driver indeed: " + mUser.type +
-                                            ".I found a footer on my route named: " +
-                                            user.name;
-                                    Log.d(TAG, message);
-                                    showSnackbar(message);
-                                    mMap.clear();
-                                    addMarkersToMap(origin, dest, mMap);
-                                }
-                            }
+    private void removeUserTypeListener() {
+        String userType = getUserType();
 
-                        }
-                    }
-
-
-                }
-            }
-
-            @Override
-            public void onCancelled(DatabaseError databaseError) {
-                Log.w(TAG, "Failed to read value.", databaseError.toException());
-            }
-        });
-
+        Query usersInTime = mFirebaseDbRef.child("routes")
+                .child(userType)
+                .orderByChild("endTime")
+                .startAt(mUser.endTime);
+        usersInTime.removeEventListener(mRouteListener);
     }
 
     private String getUserType() {
@@ -319,11 +290,13 @@ public class AccountActivity extends AppCompatActivity implements OnMapReadyCall
         mDriverFooterSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                removeUserTypeListener();
                 if (isChecked) {
                     mUser.type = Constants.TYPE_DRIVER;
                 } else {
                     mUser.type = Constants.TYPE_FOOTER;
                 }
+
 
                 SharedPrefHelper.saveUserType(AccountActivity.this, mUser.type);
             }
@@ -483,9 +456,9 @@ public class AccountActivity extends AppCompatActivity implements OnMapReadyCall
                 .icon(userMarker)
                 .title(results.routes[0].legs[0].startAddress));
         mMap.addMarker(new MarkerOptions()
-                        .position(new LatLng(results.routes[0].legs[0].endLocation.lat,
+                .position(new LatLng(results.routes[0].legs[0].endLocation.lat,
                         results.routes[0].legs[0].endLocation.lng)).title(results.routes[0].legs[0].startAddress)
-                        .snippet(getEndLocationTitle(results))
+                .snippet(getEndLocationTitle(results))
                 .icon(userMarker)
         );
     }
@@ -538,6 +511,7 @@ public class AccountActivity extends AppCompatActivity implements OnMapReadyCall
 
         // unregister the profile tracker receiver
         profileTracker.stopTracking();
+        removeUserTypeListener();
     }
 
 
@@ -787,6 +761,10 @@ public class AccountActivity extends AppCompatActivity implements OnMapReadyCall
             return;
         }
         mUser.startTime = new Date().getTime();
+        mUser.endTime = mUser.startTime + TimeUnit.MINUTES.toMillis(mUser.intervalInMinutes);
+
+        initializeFirebaseDb();
+
         writeNewRoute(mUser);
     }
 

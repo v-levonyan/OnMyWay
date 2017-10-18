@@ -19,7 +19,8 @@ public class User {
     public String id;
     public String name;
     public long startTime;
-    public int intervalInMinutes;
+    public long intervalInMinutes;
+    public long endTime;
     public String startLocation;
     public String endLocation;
     public String type;
@@ -31,7 +32,8 @@ public class User {
     public User(String id,
                 String name,
                 long startTime,
-                int intervalInMinutes,
+                long intervalInMinutes,
+                long endTime,
                 String startLocation,
                 String endLocation,
                 String type) {
@@ -39,6 +41,7 @@ public class User {
         this.name = name;
         this.startTime = startTime;
         this.intervalInMinutes = intervalInMinutes;
+        this.endTime = endTime;
         this.startLocation = startLocation;
         this.endLocation = endLocation;
         this.type = type;
@@ -52,6 +55,7 @@ public class User {
         result.put("name", name);
         result.put("startTime", startTime);
         result.put("intervalInMinutes", intervalInMinutes);
+        result.put("endTime", endTime);
         result.put("startLocation", startLocation);
         result.put("endLocation", endLocation);
         result.put("type", type);
