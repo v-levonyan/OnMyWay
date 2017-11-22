@@ -162,8 +162,8 @@ public class AccountActivity extends AppCompatActivity implements OnMapReadyCall
                                     ".I am on the route of the driver: " +
                                     user.name;
                             Log.d(TAG, message);
-                            Log.d(TAG, user.type + " endTime: " + user.endTime);
-                            Log.d(TAG, mUser.type + " endTime: " + mUser.endTime);
+//                            Log.d(TAG, user.type + " endTime: " + user.endTime);
+//                            Log.d(TAG, mUser.type + " endTime: " + mUser.endTime);
                             showSnackbar(message);
                             mMap.clear();
                             addPolyline(result, mMap);
@@ -765,7 +765,8 @@ public class AccountActivity extends AppCompatActivity implements OnMapReadyCall
 
         initializeFirebaseDb();
 
-        writeNewRoute(mUser);
+//        writeNewRoute(mUser);
+        simpleWriteNewRoute(mUser);
     }
 
     private void writeNewUser(User user) {
@@ -786,6 +787,10 @@ public class AccountActivity extends AppCompatActivity implements OnMapReadyCall
         childUpdates.put("/routes/" + user.type + "/" + key, userValues);
 
         mFirebaseDbRef.updateChildren(childUpdates);
+    }
+
+    private void simpleWriteNewRoute(User user) {
+        mFirebaseDbRef.child("routes").child(user.type).push().setValue(user);
     }
 
 }
